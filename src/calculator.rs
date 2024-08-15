@@ -70,4 +70,50 @@ impl Calculator {
         }
         Ok(tokens)
     }
+
+    pub fn to_rpn(tokens: Vec<Token>) -> Vec<Token> {
+        let mut output_queue: Vec<Token> = Vec::new();
+        let mut operator_stack: Vec<Token> = Vec::new();
+
+        for token in tokens {
+            match token {
+                Token::Number(_) => output_queue.push(token),
+                Token::Op(op) => {
+                    while let Some(Token::Op(top_op)) = operator_stack.last() {
+                        if Self::precedence(&op) <= Self::precedence(top_op) {
+                            output_queue.push(operator_stack.pop().unwrap());
+                        } else {
+                            break;
+                        }
+                    }
+                    operator_stack.push(Token::Op(op));
+                },
+                Token::Bracket('(') => operator_stack.push(token),
+                Token::Bracket(')') => {
+                    while let Some(top) = operator_stack.pop() {
+                        if top == Token::Bracket('(') {
+                            break;
+                        }
+                        output_queue.push(top);
+                    }
+                },
+                _ => {} // if parsing is right then this should not happen
+            }
+        }
+
+        // pop remaining ops from stack to the output queue
+        while let Some(op) = operator_stack.pop() {
+            output_queue.push(op);
+        }
+
+        output_queue
+    }
+
+    fn precedence(op: &Operator) -> u8 {
+        match op {
+            Operator::Add | Operator::Sub => 1,
+            Operator::Mul | Operator::Div => 2,
+        }
+    }
+
 }
