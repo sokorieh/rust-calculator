@@ -3,14 +3,14 @@ pub enum Operator {
     Add,
     Sub,
     Mul,
-    Div
+    Div,
 }
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Token {
     Number(u32),
     Op(Operator),
-    Bracket(char)
+    Bracket(char),
 }
 
 pub struct Calculator {}
@@ -18,7 +18,9 @@ pub struct Calculator {}
 #[derive(Debug)]
 pub enum Error {
     BadToken(char),
-    MismatchedParens
+    MismatchedParens,
+    DivisionByZero,
+    InvalidExpression,
 }
 
 impl Calculator {
@@ -31,9 +33,8 @@ impl Calculator {
             match c {
                 '0'..='9' => match tokens.last_mut() {
                     Some(Token::Number(n)) => {
-                        // ascii so sub 48 to get 0 through 9 val
                         *n = *n * 10 + (c as u32 - 48);
-                    },
+                    }
                     _ => {
                         let digit = c as u32 - 48;
                         tokens.push(Token::Number(digit));
@@ -42,7 +43,7 @@ impl Calculator {
                 '(' => {
                     tokens.push(Token::Bracket('('));
                     parens.push(c);
-                },
+                }
                 ')' => {
                     tokens.push(Token::Bracket(')'));
                     if let Some(p) = parens.pop() {
@@ -52,20 +53,17 @@ impl Calculator {
                     } else {
                         return Err(Error::MismatchedParens);
                     }
-                },
+                }
                 '+' => tokens.push(Token::Op(Operator::Add)),
                 '/' => tokens.push(Token::Op(Operator::Div)),
                 '*' => tokens.push(Token::Op(Operator::Mul)),
                 '-' => tokens.push(Token::Op(Operator::Sub)),
-
-                // whitespace
-                ' ' => {},
-                '\n' => {},
-                _ => return Err(Error::BadToken(c))
-
+                ' ' => {}
+                '\n' => {}
+                _ => return Err(Error::BadToken(c)),
             }
         }
-        if parens.len() > 0 {
+        if !parens.is_empty() {
             return Err(Error::MismatchedParens);
         }
         Ok(tokens)
@@ -87,7 +85,7 @@ impl Calculator {
                         }
                     }
                     operator_stack.push(Token::Op(op));
-                },
+                }
                 Token::Bracket('(') => operator_stack.push(token),
                 Token::Bracket(')') => {
                     while let Some(top) = operator_stack.pop() {
@@ -96,12 +94,11 @@ impl Calculator {
                         }
                         output_queue.push(top);
                     }
-                },
+                }
                 _ => {} // if parsing is right then this should not happen
             }
         }
 
-        // pop remaining ops from stack to the output queue
         while let Some(op) = operator_stack.pop() {
             output_queue.push(op);
         }
@@ -116,4 +113,45 @@ impl Calculator {
         }
     }
 
+    pub fn evaluate_rpn(tokens: Vec<Token>) -> Result<u32, Error> {
+        let mut stack: Vec<u32> = Vec::new();
+
+        for token in tokens {
+            match token {
+                Token::Number(n) => stack.push(n),
+                Token::Op(op) => {
+                    if stack.len() < 2 {
+                        return Err(Error::InvalidExpression);
+                    }
+                    let b = stack.pop().unwrap();
+                    let a = stack.pop().unwrap();
+                    let result = match op {
+                        Operator::Add => a + b,
+                        Operator::Sub => a - b,
+                        Operator::Mul => a * b,
+                        Operator::Div => {
+                            if b == 0 {
+                                return Err(Error::DivisionByZero);
+                            }
+                            a / b
+                        }
+                    };
+                    stack.push(result);
+                }
+                _ => return Err(Error::InvalidExpression),
+            }
+        }
+
+        if stack.len() == 1 {
+            Ok(stack.pop().unwrap())
+        } else {
+            Err(Error::InvalidExpression)
+        }
+    }
+
+    pub fn calculate<T: AsRef<str>>(expr: T) -> Result<u32, Error> {
+        let tokens = Self::parse(expr)?;
+        let rpn_tokens = Self::to_rpn(tokens);
+        Self::evaluate_rpn(rpn_tokens)
+    }
 }
